@@ -105,7 +105,7 @@ function authenticate(req, res, next) {
 // Kafka setup
 const kafka = new Kafka({
   clientId: "order-service",
-  brokers: ["localhost:9094"],
+  brokers: ["0.tcp.in.ngrok.io:19532"], // ngrok public broker address
 });
 
 const producer = kafka.producer();
