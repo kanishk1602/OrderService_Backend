@@ -333,41 +333,109 @@ const run = async () => {
              // Publish email event to Kafka (email-service will handle sending)
              if (email) {
                // Format order details for email
-               const itemsList = (cart || []).map((item, idx) => 
-                 `${idx + 1}. ${item.name} - Qty: ${item.quantity} × ₹${item.price?.toFixed(2) || '0.00'} = ₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}`
-               ).join('\n');
+               const paymentMethodLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
+               const paymentIdentifier = provider === 'razorpay' ? (paymentId || providerPaymentId) : (providerPaymentId || providerOrderId);
 
-              // Build payment lines dynamically for email
-              const paymentMethodLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
-              const paymentIdentifier = provider === 'razorpay' ? (paymentId || providerPaymentId) : (providerPaymentId || providerOrderId);
+               // Build HTML email
+               const itemsHtml = (cart || []).map((item) => `
+                 <tr>
+                   <td style="padding: 12px; border-bottom: 1px solid #eee;">${item.name}</td>
+                   <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+                   <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">₹${item.price?.toFixed(2) || '0.00'}</td>
+                   <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                 </tr>
+               `).join('');
 
-              const emailText = `
-Order Confirmation
-==================
+               const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Order Confirmed! ✓</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Thank you for your purchase</p>
+    </div>
+    
+    <!-- Order Info -->
+    <div style="padding: 30px;">
+      <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 5px 0;"><strong>Order ID:</strong></td>
+            <td style="padding: 5px 0; text-align: right; color: #667eea;">${oid}</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0;"><strong>Date:</strong></td>
+            <td style="padding: 5px 0; text-align: right;">${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0;"><strong>Payment Method:</strong></td>
+            <td style="padding: 5px 0; text-align: right;">${paymentMethodLabel}</td>
+          </tr>
+          <tr>
+            <td style="padding: 5px 0;"><strong>Status:</strong></td>
+            <td style="padding: 5px 0; text-align: right;"><span style="background-color: #28a745; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;">PAID</span></td>
+          </tr>
+        </table>
+      </div>
+      
+      <!-- Order Items -->
+      <h2 style="color: #333; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Order Details</h2>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+        <thead>
+          <tr style="background-color: #f8f9fa;">
+            <th style="padding: 12px; text-align: left; font-weight: 600;">Item</th>
+            <th style="padding: 12px; text-align: center; font-weight: 600;">Qty</th>
+            <th style="padding: 12px; text-align: right; font-weight: 600;">Price</th>
+            <th style="padding: 12px; text-align: right; font-weight: 600;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+      </table>
+      
+      <!-- Totals -->
+      <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0;">Subtotal:</td>
+            <td style="padding: 8px 0; text-align: right;">₹${total.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0;">Shipping:</td>
+            <td style="padding: 8px 0; text-align: right; color: #28a745;">FREE</td>
+          </tr>
+          <tr style="border-top: 2px solid #667eea;">
+            <td style="padding: 12px 0; font-size: 18px;"><strong>Total:</strong></td>
+            <td style="padding: 12px 0; text-align: right; font-size: 18px; color: #667eea;"><strong>₹${total.toFixed(2)}</strong></td>
+          </tr>
+        </table>
+      </div>
+      
+      <!-- Payment Reference -->
+      <p style="color: #666; font-size: 12px; margin-top: 20px; text-align: center;">
+        Payment Reference: ${paymentIdentifier || 'N/A'}
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #eee;">
+      <p style="color: #666; margin: 0 0 10px 0; font-size: 14px;">Thank you for shopping with us!</p>
+      <p style="color: #999; margin: 0; font-size: 12px;">If you have any questions, please contact our support team.</p>
+    </div>
+  </div>
+</body>
+</html>
+               `.trim();
 
-Thank you for your order!
-
-Order Details:
---------------
-${itemsList || 'No items'}
-
-Subtotal: ₹${total.toFixed(2)}
-Tax: ₹0.00
-Shipping: FREE
---------------
-Total: ₹${total.toFixed(2)}
-
-Payment Method: ${paymentMethodLabel}
-
-Thank you for shopping with us!
-
-If you have any questions, please contact support.
-Payment Reference: ${paymentIdentifier || 'N/A'}
-
-Order ID: ${oid}
-Order Date: ${new Date().toLocaleString()}
-Payment Status: PAID
-              `.trim();
+               // Plain text fallback
+               const emailText = `Order Confirmation - ${oid}\n\nThank you for your order!\n\nOrder ID: ${oid}\nDate: ${new Date().toLocaleString()}\nPayment: ${paymentMethodLabel}\nStatus: PAID\n\nTotal: ₹${total.toFixed(2)}\n\nPayment Reference: ${paymentIdentifier || 'N/A'}`;
 
               await producer.send({
                 topic: "send-email",
@@ -377,6 +445,7 @@ Payment Status: PAID
                       to: email,
                       subject: `Order Confirmation - ${oid}`,
                       text: emailText,
+                      html: emailHtml,
                       type: "order-success",
                       orderId: oid,
                       total,
@@ -401,26 +470,68 @@ Payment Status: PAID
 
             // Publish email event for payment failure
             if (email) {
-              const emailText = `
-Payment Failed
-==============
-
-We're sorry, but your payment attempt was unsuccessful.
-
-Order ID: ${oid}
-Attempted on: ${new Date().toLocaleString()}
-Status: FAILED
-
-What to do next:
-- Please check your payment method and try again
-- Verify your card has sufficient funds
-- Contact your bank if the issue persists
-- Reach out to our support team for assistance
-
-Your cart items are still saved and ready for checkout.
-
-Thank you for your patience.
+              const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); padding: 30px; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Payment Failed ✗</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">We couldn't process your payment</p>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 30px;">
+      <div style="background-color: #fff3f3; border-left: 4px solid #e74c3c; padding: 20px; margin-bottom: 25px;">
+        <p style="margin: 0; color: #333;">We're sorry, but your payment attempt was unsuccessful.</p>
+      </div>
+      
+      <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px 0;"><strong>Order ID:</strong></td>
+            <td style="padding: 8px 0; text-align: right;">${oid}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0;"><strong>Attempted on:</strong></td>
+            <td style="padding: 8px 0; text-align: right;">${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0;"><strong>Status:</strong></td>
+            <td style="padding: 8px 0; text-align: right;"><span style="background-color: #e74c3c; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;">FAILED</span></td>
+          </tr>
+        </table>
+      </div>
+      
+      <h2 style="color: #333; font-size: 18px; margin-bottom: 15px;">What to do next:</h2>
+      <ul style="color: #666; line-height: 1.8; padding-left: 20px;">
+        <li>Check your payment method and try again</li>
+        <li>Verify your card has sufficient funds</li>
+        <li>Contact your bank if the issue persists</li>
+        <li>Reach out to our support team for assistance</li>
+      </ul>
+      
+      <p style="color: #28a745; margin-top: 20px; padding: 15px; background-color: #f0fff4; border-radius: 8px; text-align: center;">
+        ✓ Your cart items are still saved and ready for checkout.
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #eee;">
+      <p style="color: #666; margin: 0 0 10px 0; font-size: 14px;">Thank you for your patience.</p>
+      <p style="color: #999; margin: 0; font-size: 12px;">If you need help, please contact our support team.</p>
+    </div>
+  </div>
+</body>
+</html>
               `.trim();
+
+              const emailText = `Payment Failed - Order ${oid}\n\nWe're sorry, but your payment attempt was unsuccessful.\n\nOrder ID: ${oid}\nAttempted on: ${new Date().toLocaleString()}\nStatus: FAILED\n\nPlease check your payment method and try again.\n\nYour cart items are still saved.`;
 
               await producer.send({
                 topic: "send-email",
@@ -430,6 +541,7 @@ Thank you for your patience.
                       to: email,
                       subject: `Payment Failed - Order ${oid}`,
                       text: emailText,
+                      html: emailHtml,
                       type: "payment-failed",
                       orderId: oid,
                     }),
