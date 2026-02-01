@@ -289,11 +289,16 @@ const run = async () => {
 
             // Create or update order as paid
             const total = Array.isArray(cart) ? cart.reduce((s, i) => s + i.price * i.quantity, 0) : 0;
-            const oid = razorpayOrderId || `order_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-            // Determine payment provider and ids
+            
+            // Determine payment provider first
             const provider = payload.gateway || (paymentId || razorpayOrderId ? 'razorpay' : (payload.paymentIntentId ? 'stripe' : 'unknown'));
-            const providerOrderId = provider === 'razorpay' ? razorpayOrderId : (payload.paymentIntentId || null);
+            
+            // Use appropriate order ID based on provider
+            const oid = provider === 'razorpay' ? razorpayOrderId : 
+                       provider === 'stripe' ? (payload.sessionId || payload.paymentIntentId) :
+                       `order_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+            const providerOrderId = provider === 'razorpay' ? razorpayOrderId : (payload.paymentIntentId || payload.sessionId || null);
             const providerPaymentId = provider === 'razorpay' ? paymentId : (payload.paymentIntentId || null);
             const providerSignature = provider === 'razorpay' ? signature : (payload.signature || null);
 
